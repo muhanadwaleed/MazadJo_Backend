@@ -1,25 +1,21 @@
-# --- Runtime (install in production and local dev) ---
 Django>=5.0,<6
 djangorestframework>=3.15,<4
 djangorestframework-simplejwt>=5.3,<6
-channels[daphne]>=4.0,<5
-channels-redis>=4.2,<5
-celery[redis]>=5.4,<6
-django-celery-beat>=2.6,<3
-redis>=5.0,<6
 django-environ>=0.11,<1
-psycopg[binary]>=3.2,<4
-drf-spectacular>=0.27,<1
 django-cors-headers>=4.3,<5
+drf-spectacular>=0.27,<1
+psycopg[binary]>=3.2,<4
+# Celery: eager in-process when REDIS_URL unset (OTP, beat schedules via DB)
+celery>=5.4,<6
+django-celery-beat>=2.6,<3
+# ASGI stack (HTTP + WebSocket routes; in-memory channel layer without Redis)
+channels[daphne]>=4.0,<5
+# Metrics route is registered but disabled unless ENABLE_PROMETHEUS_METRICS=True
 prometheus-client>=0.20,<1
-sentry-sdk[django,celery]>=2.19,<3
 
-# --- Tests & CI (same file so `pip install -r requirements.txt` is sufficient for CI) ---
 pytest>=8.3,<9
 pytest-django>=4.9,<5
-# Install before pre-commit so the resolver can satisfy pre-commit's dependency on virtualenv.
 virtualenv>=20.10.0,<22
 pre-commit>=4.0,<5
-# CLI formatting (same versions as .pre-commit-config.yaml; config in pyproject.toml)
 black>=25.1.0,<26
 isort>=5.13.2,<6
