@@ -1,0 +1,16 @@
+---
+description: Enforce live auction domain invariants and safety checks across backend changes
+alwaysApply: true
+---
+
+# Live Auction Invariants
+
+- Keep **pre-publish** and **live bidding** as distinct **phases** on `Auction` (status-driven); do not split them across duplicate tables or parallel folder structures.
+- Treat subscription eligibility and bid placement as different concerns; a paid subscription is required before bidding.
+- Keep bidding logic backend-driven: validate minimum increment, auction status, and timing server-side.
+- Preserve transaction safety for bids: lock auction state, re-check price inside transaction, then write bid and update current price.
+- Ensure anti-sniping extension behavior remains server-controlled and deterministic.
+- Maintain strict auditability for staff and financial actions (review decisions, status changes, refunds, freezes, payment reconciliation).
+- Never expose private participant identity data during active auctions.
+- Keep payment integration behind provider abstraction (transaction + webhook handler), not embedded in business endpoints.
+- If behavior changes, update `docs/API.md` and `docs/SYSTEM_DESIGN.md` in the same task.

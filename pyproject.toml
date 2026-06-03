@@ -1,0 +1,31 @@
+[tool.black]
+line-length = 88
+target-version = ["py311", "py312"]
+extend-exclude = '''
+/(
+  \.venv
+  | migrations
+)/
+'''
+
+[tool.isort]
+profile = "black"
+skip_gitignore = true
+known_first_party = [
+  "accounts",
+  "auctions",
+  "audit",
+  "bidding",
+  "catalog",
+  "core",
+  "cms",
+  "configuration",
+  "fraud",
+  "notifications",
+  "observability",
+  "payments",
+  "ratings",
+  "settlements",
+  "subscriptions",
+]
+skip_glob = ["*/migrations/*"]

@@ -1,0 +1,205 @@
+erDiagram
+  users {
+    bigint id PK
+    varchar username UK
+    boolean is_staff
+    varchar user_type
+  }
+
+  countries {
+    bigint id PK
+    varchar name_en
+  }
+
+  cities {
+    bigint id PK
+    bigint country_id FK
+    varchar name_en
+  }
+
+  areas {
+    bigint id PK
+    bigint city_id FK
+    varchar name_en
+  }
+
+  product_categories {
+    bigint id PK
+    varchar name_ar
+    varchar name_en
+    varchar category_type
+    boolean requires_review
+    boolean requires_transfer_process
+    boolean requires_inspection
+    boolean is_active
+  }
+
+  product_settings {
+    bigint id PK
+    bigint category_id FK "1:1"
+    decimal subscription_fee
+    smallint delivery_period_days
+    boolean auction_extension_enabled
+    smallint extension_minutes
+    smallint extension_trigger_seconds
+  }
+
+  auctions {
+    bigint id PK
+    bigint seller_id FK
+    bigint product_category_id FK
+    bigint area_id FK "nullable"
+    varchar auction_number UK
+    varchar status
+    varchar title
+    text description
+    decimal start_price
+    decimal current_price
+    decimal reserve_price "nullable"
+    decimal min_bid_increment
+    varchar location_link
+    datetime starts_at
+    datetime ends_at
+    datetime origin_deadline "nullable"
+    datetime extend_deadline "nullable"
+    datetime actual_end_at "nullable"
+    smallint extension_count
+    bigint winner_bid_id FK "nullable"
+    bigint winner_user_id FK "nullable"
+  }
+
+  auction_review_logs {
+    bigint id PK
+    bigint auction_id FK
+    bigint reviewer_id FK "nullable"
+    varchar decision
+    text reason
+    datetime created_at
+  }
+
+  auction_review_checklist {
+    bigint id PK
+    bigint auction_id FK
+    varchar checklist_item_key
+    varchar checklist_item_label
+    boolean is_checked
+    bigint checked_by_id FK "nullable"
+    datetime checked_at "nullable"
+  }
+
+  auction_media {
+    bigint id PK
+    bigint auction_id FK
+    varchar media_type
+    blob file_data
+    varchar file_type
+    varchar file_name
+    boolean is_blurred
+    smallint sort_order
+  }
+
+  auction_watchlist {
+    bigint id PK
+    bigint auction_id FK
+    bigint user_id FK
+    datetime created_at
+  }
+
+  auction_share_logs {
+    bigint id PK
+    bigint auction_id FK
+    bigint user_id FK "nullable"
+    varchar channel
+    datetime created_at
+  }
+
+  auction_subscriptions {
+    bigint id PK
+    bigint auction_id FK
+    bigint user_id FK
+    varchar status
+    decimal subscription_fee
+    varchar payment_status
+    datetime activated_at "nullable"
+  }
+
+  subscription_payments {
+    bigint id PK
+    bigint subscription_id FK
+    bigint payment_transaction_id FK
+    decimal amount
+    varchar payment_status
+  }
+
+  bids {
+    bigint id PK
+    bigint auction_id FK
+    bigint bidder_id FK
+    bigint subscription_id FK "nullable"
+    decimal amount
+    decimal increment_amount
+    varchar bid_source
+    varchar status
+    boolean suppress_publication
+    datetime created_at
+  }
+
+  auction_price_snapshots {
+    bigint id PK
+    bigint auction_id FK
+    bigint bid_id FK "nullable"
+    decimal previous_price
+    decimal new_price
+    varchar event_type
+    datetime created_at
+  }
+
+  payment_transactions {
+    bigint id PK
+    bigint user_id FK
+    varchar related_entity_type
+    bigint related_entity_id
+    varchar transaction_type
+    decimal amount
+    varchar status
+    datetime initiated_at
+  }
+
+  notifications {
+    bigint id PK
+    bigint user_id FK
+  }
+
+  audit_logs {
+    bigint id PK
+    bigint actor_user_id FK "nullable"
+  }
+
+  countries ||--o{ cities : contains
+  cities ||--o{ areas : contains
+  product_categories ||--|| product_settings : settings
+  users ||--o{ auctions : seller
+  product_categories ||--o{ auctions : category
+  areas ||--o{ auctions : area_optional
+  users ||--o{ auctions : winner_optional
+  auctions ||--o{ auction_review_logs : reviews
+  users ||--o{ auction_review_logs : reviewer
+  auctions ||--o{ auction_review_checklist : checklist
+  users ||--o{ auction_review_checklist : checked_by
+  auctions ||--o{ auction_media : media
+  auctions ||--o{ auction_watchlist : watchers
+  users ||--o{ auction_watchlist : watches
+  auctions ||--o{ auction_share_logs : shares
+  users ||--o{ auction_share_logs : optional_sharer
+  auctions ||--o{ auction_subscriptions : subscriptions
+  users ||--o{ auction_subscriptions : subscriber
+  auction_subscriptions ||--o{ subscription_payments : payments
+  payment_transactions ||--o{ subscription_payments : gateway
+  auctions ||--o{ bids : bids
+  users ||--o{ bids : bidder
+  auction_subscriptions ||--o{ bids : optional_subscription
+  auctions ||--o{ auction_price_snapshots : price_history
+  bids ||--o{ auction_price_snapshots : optional_bid
+  users ||--o{ payment_transactions : payer
+  users ||--o{ notifications : recipient
+  users ||--o{ audit_logs : actor_optional

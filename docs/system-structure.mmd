@@ -1,0 +1,423 @@
+%% MazadJo backend — full active schema (Django models).
+%% Matches db_table names in code. Excludes retired apps: auction_requests, settlements.
+%% payment_transactions.related_entity_* is polymorphic (no FK line to subscriptions).
+
+erDiagram
+  %% --- Accounts ---
+  users {
+    bigint id PK
+    varchar username UK
+    varchar user_type
+    boolean is_staff
+    varchar phone_number
+    boolean is_phone_verified
+    boolean is_email_verified
+    boolean is_blocked
+    boolean is_shadow_banned
+  }
+
+  user_risk_scores {
+    bigint id PK
+    bigint user_id FK UK
+    smallint score
+    datetime last_updated
+  }
+
+  user_stats {
+    bigint id PK
+    bigint user_id FK UK
+    int total_bids
+    int total_wins
+    datetime updated_at
+  }
+
+  user_fingerprints {
+    bigint id PK
+    bigint user_id FK
+    varchar ip_address
+    text user_agent
+    varchar device_hash
+    datetime created_at
+  }
+
+  otp_verifications {
+    bigint id PK
+    bigint user_id FK "nullable"
+    varchar destination_type
+    varchar destination_value
+    varchar purpose
+    datetime expires_at
+    datetime verified_at
+    datetime created_at
+  }
+
+  %% --- Catalog ---
+  countries {
+    bigint id PK
+    varchar name_en
+    varchar name_ar
+    varchar code UK
+    boolean is_active
+  }
+
+  cities {
+    bigint id PK
+    bigint country_id FK
+    varchar name_en
+    varchar name_ar
+    boolean is_active
+  }
+
+  areas {
+    bigint id PK
+    bigint city_id FK
+    varchar name_en
+    varchar name_ar
+    boolean is_active
+  }
+
+  product_categories {
+    bigint id PK
+    bigint fees_configuration_id FK
+    varchar name_ar
+    varchar name_en
+    varchar category_type
+    boolean requires_review
+    boolean requires_transfer_process
+    boolean requires_inspection
+    boolean is_active
+  }
+
+  fees_configurations {
+    bigint id PK
+    varchar name
+    decimal bidder_insurance_amount
+    decimal seller_insurance_amount
+    decimal subscription_amount
+  }
+
+  product_settings {
+    bigint id PK
+    bigint category_id FK UK
+    decimal min_start_price
+    decimal min_bid_increment
+    smallint delivery_period_days
+    boolean auction_extension_enabled
+    smallint extension_minutes
+    smallint extension_trigger_seconds
+    boolean is_active
+  }
+
+  review_checklist_items {
+    bigint id PK
+    varchar key UK
+    varchar label_en
+    varchar label_ar
+    smallint sort_order
+    boolean is_active
+  }
+
+  product_category_checklists {
+    bigint id PK
+    bigint category_id FK
+    bigint checklist_item_id FK
+    smallint sort_order
+  }
+
+  cms_faqs {
+    bigint id PK
+    varchar question_en
+    boolean is_active
+  }
+
+  %% --- Auction lifecycle (single Auction entity: draft through close) ---
+  auctions {
+    bigint id PK
+    bigint seller_id FK
+    bigint product_category_id FK
+    bigint area_id FK "nullable"
+    varchar auction_number UK
+    varchar status
+    varchar title
+    decimal start_price
+    decimal current_price
+    decimal reserve_price "nullable"
+    decimal min_bid_increment
+    varchar location_link
+    datetime starts_at
+    datetime ends_at
+    datetime origin_deadline "nullable"
+    datetime extend_deadline "nullable"
+    datetime actual_end_at "nullable"
+    smallint extension_count
+    bigint winner_bid_id FK "nullable"
+    bigint winner_user_id FK "nullable"
+    boolean is_anonymous_bidding
+    int participants_count
+    int views_count
+    datetime created_at
+    datetime updated_at
+  }
+
+  auction_media {
+    bigint id PK
+    bigint auction_id FK
+    varchar media_type
+    blob file_data
+    varchar file_type
+    varchar file_name
+    boolean is_blurred
+    smallint sort_order
+  }
+
+  auction_review_logs {
+    bigint id PK
+    bigint auction_id FK
+    bigint reviewer_id FK "nullable"
+    varchar decision
+    text reason
+    datetime created_at
+  }
+
+  auction_review_checklist {
+    bigint id PK
+    bigint auction_id FK
+    bigint source_item_id FK "nullable"
+    varchar checklist_item_key
+    varchar checklist_item_label
+    boolean is_checked
+    bigint checked_by_id FK "nullable"
+    datetime checked_at "nullable"
+  }
+
+  auction_watchlist {
+    bigint id PK
+    bigint auction_id FK
+    bigint user_id FK
+    datetime created_at
+  }
+
+  auction_share_logs {
+    bigint id PK
+    bigint auction_id FK
+    bigint user_id FK "nullable"
+    varchar channel
+    datetime created_at
+  }
+
+  %% --- Subscriptions and payments ---
+  auction_subscriptions {
+    bigint id PK
+    bigint auction_id FK
+    bigint user_id FK
+    varchar status
+    decimal subscription_fee
+    varchar payment_status
+    datetime activated_at "nullable"
+    datetime withdrawn_at "nullable"
+    datetime created_at
+  }
+
+  subscription_payments {
+    bigint id PK
+    bigint subscription_id FK
+    bigint payment_transaction_id FK
+    decimal amount
+    varchar payment_method
+    varchar payment_status
+    datetime paid_at "nullable"
+  }
+
+  payment_transactions {
+    bigint id PK
+    bigint user_id FK
+    varchar related_entity_type
+    bigint related_entity_id
+    varchar transaction_type
+    decimal amount
+    varchar currency
+    varchar provider
+    varchar status
+    datetime initiated_at
+    datetime completed_at "nullable"
+  }
+
+  %% --- Bidding ---
+  bids {
+    bigint id PK
+    bigint auction_id FK
+    bigint bidder_id FK
+    bigint subscription_id FK "nullable"
+    decimal amount
+    decimal increment_amount
+    varchar bid_source
+    varchar status
+    boolean suppress_publication
+    datetime created_at
+  }
+
+  bid_idempotency {
+    bigint id PK
+    bigint auction_id FK
+    bigint user_id FK
+    varchar key
+    bigint bid_id FK
+    datetime created_at
+  }
+
+  auction_price_snapshots {
+    bigint id PK
+    bigint auction_id FK
+    bigint bid_id FK "nullable"
+    decimal previous_price
+    decimal new_price
+    varchar event_type
+    datetime created_at
+  }
+
+  %% --- Notifications ---
+  notifications {
+    bigint id PK
+    bigint user_id FK
+    varchar channel
+    varchar notification_type
+    varchar title
+    text body
+    varchar entity_type
+    bigint entity_id "nullable"
+    varchar status
+    datetime sent_at "nullable"
+    datetime created_at
+  }
+
+  notification_logs {
+    bigint id PK
+    bigint notification_id FK
+    varchar provider
+    varchar status
+    datetime created_at
+  }
+
+  %% --- Audit ---
+  audit_logs {
+    bigint id PK
+    bigint actor_user_id FK "nullable"
+    varchar entity_type
+    bigint entity_id
+    varchar action
+    json old_values_json
+    json new_values_json
+    datetime created_at
+  }
+
+  %% --- Post-auction trust ---
+  ratings {
+    bigint id PK
+    bigint auction_id FK
+    bigint rater_user_id FK
+    bigint rated_user_id FK
+    varchar role_context
+    smallint score
+    text comment
+    datetime created_at
+  }
+
+  rating_issue_options {
+    bigint id PK
+    varchar code UK
+    varchar label_ar
+    varchar label_en
+    boolean is_active
+  }
+
+  rating_issue_reports {
+    bigint id PK
+    bigint rating_id FK
+    bigint selected_issue_option_id FK
+    text details
+    datetime created_at
+  }
+
+  user_alerts {
+    bigint id PK
+    bigint user_id FK
+    bigint auction_id FK "nullable"
+    varchar alert_type
+    text reason
+    bigint created_by_id FK "nullable"
+    datetime created_at
+  }
+
+  disputes {
+    bigint id PK
+    bigint auction_id FK
+    bigint opened_by_user_id FK
+    bigint against_user_id FK "nullable"
+    varchar dispute_type
+    varchar status
+    text description
+    datetime created_at
+    datetime resolved_at "nullable"
+  }
+
+  %% --- Relationships ---
+  users ||--|| user_risk_scores : risk
+  users ||--|| user_stats : stats
+  users ||--o{ user_fingerprints : fingerprints
+  users ||--o{ otp_verifications : otp
+
+  countries ||--o{ cities : contains
+  cities ||--o{ areas : contains
+  product_categories ||--|| product_settings : settings
+  fees_configurations ||--o{ product_categories : categories
+  product_categories ||--o{ product_category_checklists : checklist_links
+  review_checklist_items ||--o{ product_category_checklists : template
+
+  users ||--o{ auctions : seller
+  product_categories ||--o{ auctions : category
+  areas ||--o{ auctions : area_optional
+  users ||--o{ auctions : winner_user_optional
+  auctions }o--o| bids : winning_bid_optional
+
+  auctions ||--o{ auction_media : media
+  auctions ||--o{ auction_review_logs : reviews
+  users ||--o{ auction_review_logs : reviewer
+  auctions ||--o{ auction_review_checklist : checklist
+  users ||--o{ auction_review_checklist : checked_by
+  auctions ||--o{ auction_watchlist : watchlist
+  users ||--o{ auction_watchlist : watcher
+  auctions ||--o{ auction_share_logs : shares
+  users ||--o{ auction_share_logs : sharer_optional
+
+  auctions ||--o{ auction_subscriptions : subscriptions
+  users ||--o{ auction_subscriptions : subscriber
+  auction_subscriptions ||--o{ subscription_payments : payment_rows
+  payment_transactions ||--o{ subscription_payments : gateway_txn
+
+  auctions ||--o{ bids : bids
+  users ||--o{ bids : bidder
+  auction_subscriptions ||--o{ bids : linked_subscription
+  auctions ||--o{ bid_idempotency : idempotency_keys
+  users ||--o{ bid_idempotency : idempotency_user
+  bids ||--o{ bid_idempotency : idempotent_bid
+  auctions ||--o{ auction_price_snapshots : price_history
+  bids ||--o{ auction_price_snapshots : snapshot_bid_optional
+
+  users ||--o{ payment_transactions : payer
+  users ||--o{ notifications : recipient
+  notifications ||--o{ notification_logs : delivery_logs
+  users ||--o{ audit_logs : actor_optional
+
+  auctions ||--o{ ratings : ratings
+  users ||--o{ ratings : rater
+  users ||--o{ ratings : rated
+  ratings ||--o{ rating_issue_reports : issue_reports
+  rating_issue_options ||--o{ rating_issue_reports : issue_option
+
+  users ||--o{ user_alerts : alerted_user
+  auctions ||--o{ user_alerts : alert_auction_optional
+  users ||--o{ user_alerts : alert_created_by_optional
+
+  auctions ||--o{ disputes : disputes
+  users ||--o{ disputes : opened_by
+  users ||--o{ disputes : against_optional

@@ -1,0 +1,932 @@
+﻿1) الصورة الكبيرة للمشروع MAZAD JO
+المشروع هو Auction Marketplace Platform فيها 3 أنواع استخدام رئيسية:
+A. Public User
+* يسجل حساب
+* ينشئ مزاد كبائع
+* يشترك بمزاد كمزايد
+* يزايد
+* يفوز / يخسر
+* يقيّم
+B. Staff / Admin
+* يراجع طلبات المزادات
+* يدير المستخدمين
+* يعتمد / يرفض / يرجّع للتعديل
+* يتحكم بالإعدادات
+C. System
+* يغلق المزاد تلقائيًا
+* يحدد الفائز
+* يرجّع التأمينات
+* يرسل إشعارات
+
+________________
+
+
+2) High-Level System Design
+Core subsystems
+1. Identity & Access
+مسؤول عن:
+* التسجيل
+* تسجيل الدخول
+* OTP
+* الصلاحيات
+* إدارة الموظفين والمستخدمين
+2. Auction Management
+مسؤول عن:
+* إنشاء طلبات المزاد
+* مراجعتها
+* نشرها
+* تفعيلها
+* إنهائها
+3. Bidding Engine
+مسؤول عن:
+* استقبال المزايدات
+* التحقق من الحد الأدنى
+* تحديث السعر الحالي
+* منع التضارب
+* تمديد المزاد تلقائيًا
+4. Subscription & Deposit
+مسؤول عن:
+* اشتراك المستخدم في المزاد
+* دفع الرسوم / التأمين
+* تفعيل أهلية المزايدة
+5. Settlement & Closure
+مسؤول عن:
+* إغلاق المزاد
+* تحديد الفائز
+* استرجاع / مصادرة التأمين
+* خصم العمولة
+6. Ratings & Disputes
+مسؤول عن:
+* تقييم الطرفين
+7. Notifications
+مسؤول عن:
+* OTP
+* إشعارات حالة الطلب
+* إشعارات المزايدة
+* إشعارات الإغلاق
+8. Media & Documents
+مسؤول عن:
+* صور المنتج
+* فيديو
+* مرفقات الفحص
+* ملفات الإثبات
+9. Admin Configuration
+مسؤول عن:
+* أنواع المنتجات
+* رسوم الاشتراك
+* الحد الأدنى للمزايدة
+* قواعد التمديد
+* قواعد التوثيق والمراجعة
+________________
+
+
+3) Architecture Layers
+Presentation Layer
+* Web App
+* Mobile App
+* Admin Dashboard
+API Layer
+* REST API لمعظم العمليات
+* WebSocket / Realtime Channel للمزايدة الحية
+Application Layer
+* Services / Use Cases
+* AuctionService
+* BidService
+* PaymentService
+* ReviewService
+* NotificationService
+Domain Layer
+* Entities
+* Business rules
+* State transitions
+Data Layer
+* PostgreSQL
+* Redis
+* Object Storage للملفات
+________________
+
+
+4) اقتراح تقني مناسب
+بما إنك developer ومرجّح تشتغل على Django، فهذا مناسب جدًا:
+Backend
+* Django
+* Django REST Framework
+* PostgreSQL
+Realtime
+* Django Channels
+* Redis
+Background Jobs
+* Celery
+* Redis broker
+File Storage
+* S3-compatible storage أو Cloudinary أو local during MVP
+Notifications
+* SMS provider
+* Email provider
+* Firebase push لاحقًا
+Payments
+* Payment gateway abstraction layer
+* لا تربط النظام بـ gateway واحد مباشرة
+________________
+
+
+5) Core Domain Model
+الملف يقسم النظام عمليًا إلى مراحل واضحة:
+* تسجيل
+* إنشاء طلب مزاد
+* مراجعة
+* دفع رسوم
+* نشر
+* اشتراك
+* مزايدة
+* إغلاق
+* تقييم
+وهذا يقودنا إلى ERD مرتب.
+________________
+
+
+6) ERD المقترح
+سأقسمه إلى مجموعات.
+________________
+
+
+A. Users & Access
+users
+يمثل كل أنواع المستخدمين
+أهم الحقول
+* id
+* user_type
+   * public_user
+   * staff
+   * admin
+* username
+* full_name_ar
+* full_name_en
+* phone_number
+* country_code
+* email
+* gender
+* date_of_birth
+* profile_image
+* is_phone_verified
+* is_email_verified
+* is_active
+* is_blocked
+* failed_login_attempts
+* last_login_at
+* created_at
+* updated_at
+roles
+* id
+* code
+* name
+* description
+permissions
+* id
+* code
+* name
+* module
+user_roles
+* id
+* user_id
+* role_id
+role_permissions
+* id
+* role_id
+* permission_id
+otp_verifications
+* id
+* user_id nullable
+* destination_type (phone, email)
+* destination_value
+* otp_code_hash
+* purpose (register, login_reset, verify_phone, verify_email)
+* expires_at
+* verified_at
+* resend_count
+* created_at
+________________
+
+
+B. Product Catalog & Auction Requests
+product_categories
+* id
+* parent_id nullable
+* name_ar
+* name_en
+* category_type
+* requires_review
+* requires_transfer_process
+* requires_inspection
+* is_active
+product_settings
+إعدادات كل نوع منتج حسب ما هو واضح جدًا في الملف
+* id
+* category_id
+* min_images_count
+* max_images_count
+* video_allowed
+* max_video_duration_sec
+* attachments_allowed
+* allowed_extensions_json
+* location_link_enabled
+* min_start_price
+* min_bid_increment
+* reserve_price_required
+* inspection_required
+* blur_option_enabled
+* review_checklist_schema_json
+* subscription_fee
+* deposit_amount
+* delivery_period_days
+* auction_extension_enabled
+* extension_minutes
+* extension_trigger_seconds
+* is_active
+auction_requests
+هذه مرحلة “طلب إنشاء مزاد” قبل النشر
+* id
+* seller_id
+* product_category_id
+* status
+   * draft
+   * under_review
+   * waiting_fee_payment
+   * waiting_start
+   * returned_for_edit
+   * rejected
+   * approved
+   * published
+   * cancelled
+* title
+* description
+* country_id
+* city_id
+* area_id
+* location_link
+* auction_type (day, period)
+* start_date
+* end_date
+* auction_day
+* start_price
+* reserve_price nullable
+* min_bid_increment
+* terms_accepted
+* submission_at
+* reviewed_at
+* published_at
+* created_at
+* updated_at
+auction_request_media
+* id
+* auction_request_id
+* media_type (image, video, file)
+* file_path
+* is_blurred
+* sort_order
+* uploaded_at
+auction_request_review_logs
+* id
+* auction_request_id
+* reviewer_id
+* decision (approve, reject, return_for_edit)
+* reason
+* created_at
+auction_request_review_checklist
+* id
+* auction_request_id
+* checklist_item_key
+* checklist_item_label
+* is_checked
+* checked_by
+* checked_at
+________________
+
+
+C. Published Auctions
+auctions
+هذا هو كيان المزاد الفعلي بعد الاعتماد
+* id
+* auction_request_id
+* seller_id
+* product_category_id
+* auction_number
+* title
+* description
+* status
+   * scheduled
+   * active
+   * ended
+   * ended_without_bids
+   * delivery_in_progress
+   * closed
+   * cancelled
+* start_price
+* current_price
+* reserve_price nullable
+* min_bid_increment
+* starts_at
+* ends_at
+* actual_end_at
+* extension_count
+* winner_bid_id nullable
+* winner_user_id nullable
+* participants_count
+* views_count
+* is_anonymous_bidding
+* created_at
+* updated_at
+auction_media
+* id
+* auction_id
+* media_type
+* file_path
+* is_blurred
+* sort_order
+auction_documents
+* id
+* auction_id
+* document_type (inspection, ownership, other)
+* file_path
+* uploaded_by
+* created_at
+auction_watchlist
+المفضلة
+* id
+* auction_id
+* user_id
+* created_at
+auction_share_logs
+اختياري
+* id
+* auction_id
+* user_id nullable
+* channel
+* created_at
+________________
+
+
+D. Subscription / Participation
+auction_subscriptions
+هذا مهم لأن الملف يفرق بين المشاهدة وبين الاشتراك بالمزاد كمزايد
+* id
+* auction_id
+* user_id
+* status
+   * pending_payment
+   * active
+   * withdrawn
+   * refunded
+   * disqualified
+* subscription_fee
+* deposit_amount
+* payment_status (pending, paid, failed, refunded, confiscated)
+* activated_at
+* withdrawn_at
+* created_at
+* updated_at
+subscription_payments
+* id
+* subscription_id
+* payment_transaction_id
+* amount
+* payment_method
+* payment_status
+* paid_at
+* raw_gateway_response_json
+________________
+
+
+E. Bidding Engine
+bids
+أهم جدول في المنصة
+* id
+* auction_id
+* bidder_id
+* subscription_id
+* amount
+* increment_amount
+* bid_source (manual, quick_increment)
+* status (accepted, rejected, outbid, rolled_back)
+* rejection_reason nullable
+* is_highest_at_time
+* created_at
+auction_price_snapshots
+اختياري لكنه ممتاز للتدقيق
+* id
+* auction_id
+* bid_id nullable
+* previous_price
+* new_price
+* event_type (bid, rollback, manual_adjustment, close)
+* created_at
+auction_extensions
+* id
+* auction_id
+* triggered_by_bid_id
+* previous_end_at
+* new_end_at
+* extension_minutes
+* created_at
+________________
+
+
+F. Auction Closure & Settlement
+auction_results
+* id
+* auction_id
+* result_type (winner_selected, no_bids, cancelled)
+* winner_user_id nullable
+* winner_bid_id nullable
+* winning_amount nullable
+* closed_at
+* inspection_period_days
+* delivery_terms
+* created_at
+auction_delivery_periods
+* id
+* auction_id
+* starts_at
+* ends_at
+* status (active, expired, completed)
+* created_at
+* updated_at
+auction_settlements
+* id
+* auction_id
+* seller_id
+* winner_user_id
+* seller_deposit_amount
+* winner_deposit_amount
+* seller_commission_amount
+* winner_commission_amount
+* seller_refund_amount
+* winner_refund_amount
+* status (pending, completed, confiscated, disputed)
+* completed_at
+* created_at
+* updated_at
+________________
+
+
+G. Ratings, Alerts
+ratings
+* id
+* auction_id
+* rater_user_id
+* rated_user_id
+* role_context (seller_rates_winner, winner_rates_seller)
+* score
+* comment
+* created_at
+rating_issue_options
+من إعدادات النظام
+* id
+* code
+* label_ar
+* label_en
+* is_active
+rating_issue_reports
+* id
+* rating_id
+* selected_issue_option_id
+* details nullable
+* created_at
+user_alerts
+* id
+* user_id
+* auction_id nullable
+* alert_type (warning, freeze, ban_review, manual_review)
+* reason
+* created_by nullable
+* created_at
+________________
+
+
+H. Payments
+الأفضل تعمل abstraction موحد
+payment_transactions
+* id
+* user_id
+* related_entity_type
+   * auction_request
+   * subscription
+   * settlement
+   * refund
+* related_entity_id
+* transaction_type (charge, refund, confiscation, commission)
+* amount
+* currency
+* provider
+* provider_reference
+* method
+* status
+* initiated_at
+* completed_at
+* raw_response_json
+________________
+
+
+I. Notifications & Audit
+notifications
+* id
+* user_id
+* channel (sms, email, push, in_app)
+* notification_type
+* title
+* body
+* entity_type nullable
+* entity_id nullable
+* status (pending, sent, failed, read)
+* sent_at
+* created_at
+notification_logs
+* id
+* notification_id
+* provider
+* provider_reference
+* status
+* response_json
+* created_at
+audit_logs
+* id
+* actor_user_id nullable
+* entity_type
+* entity_id
+* action
+* old_values_json
+* new_values_json
+* ip_address
+* user_agent
+* created_at
+________________
+
+
+7) ERD Relationships بشكل واضح
+العلاقات الأساسية
+* users 1---* auction_requests
+* users 1---* auctions كـ seller
+* users 1---* auction_subscriptions
+* users 1---* bids
+* users --- roles عبر user_roles
+* roles --- permissions عبر role_permissions
+* product_categories 1---* product_settings
+* product_categories 1---* auction_requests
+* auction_requests 1---* auction_request_media
+* auction_requests 1---* auction_request_review_logs
+* auction_requests 1---* auction_request_review_checklist
+* auction_requests 1---0..1 auctions
+* auctions 1---* auction_media
+* auctions 1---* auction_documents
+* auctions 1---* auction_subscriptions
+* auctions 1---* bids
+* auctions 1---* auction_extensions
+* auctions 1---0..1 auction_results
+* auctions 1---0..1 auction_delivery_periods
+* auctions 1---0..1 auction_settlements
+* auctions 1---* ratings
+* auction_subscriptions 1---* subscription_payments
+* auction_subscriptions 1---* bids
+* ratings 1---0..* rating_issue_reports
+________________
+
+
+8) Mermaid ERD مبدئي
+  
+
+________________
+
+
+9) State Machine للمزاد
+هذا أهم جزء في الـ System Design.
+Auction Request Status
+draft
+-> under_review
+-> waiting_fee_payment
+-> waiting_start
+-> published
+وممكن أيضًا:
+under_review -> returned_for_edit
+under_review -> rejected
+returned_for_edit -> under_review
+Auction Status
+scheduled
+-> active
+-> ended
+-> delivery_in_progress
+-> closed
+ومسارات ثانية:
+active -> ended_without_bids
+active -> cancelled
+هذا متوافق مع حالات الملف مثل:
+* قيد المراجعة
+* بانتظار دفع الرسوم
+* بانتظار بدء المزاد
+* نشط
+* منتهي
+* منتهي بدون مزايدات
+* مغلق
+* ملغي
+________________
+
+
+10) أهم Business Rules لازم تنعكس في الكود
+الاشتراك والمزايدة
+* لا يمكن المزايدة إلا إذا كان المستخدم مشترك ومدفوع
+* bid amount يجب أن يكون:
+   * أكبر أو يساوي السعر الحالي + الحد الأدنى
+* لا يمكن المزايدة بعد الإغلاق
+* إذا دخل bid في آخر ثواني → تمديد تلقائي
+الإخفاء والخصوصية
+* لا تعرض بيانات المشاركين الشخصية أثناء المزاد
+* بيانات البائع والفائز تُكشف فقط بعد الإغلاق حسب الحالة
+الإغلاق
+* أعلى مزايدة = الفائز
+* الخاسرون يُرجع لهم التأمين
+* الفائز لا يُرجع له التأمين مباشرة
+التسوية
+* خلال فترة التسليم فقط يمكن طلب استرجاع التأمين
+* التقييم إجباري قبل refund
+* عند عدم الطلب خلال الفترة → مصادرة
+تقييم منخفض
+* أقل من 3 → إجراءات إضافية
+* قد ينتج عنه:
+   * warning
+   * freeze
+   * dispute
+   * ban review
+________________
+
+
+11) System Design عملي للخدمات
+Service decomposition
+AuthService
+* register_user()
+* verify_phone_otp()
+* verify_email_otp()
+* login()
+* reset_password()
+UserManagementService
+* create_employee()
+* update_user()
+* activate_user()
+* deactivate_user()
+AuctionRequestService
+* create_request()
+* update_request()
+* submit_for_review()
+* upload_media()
+AuctionReviewService
+* load_checklist()
+* approve_request()
+* reject_request()
+* return_for_edit()
+AuctionPublishService
+* publish_auction()
+* schedule_auction()
+* activate_scheduled_auction()
+AuctionSubscriptionService
+* subscribe()
+* verify_subscription_payment()
+* activate_subscription()
+* withdraw_subscription()
+BiddingService
+* place_bid()
+* validate_bid()
+* update_current_price()
+* trigger_extension_if_needed()
+AuctionClosureService
+* close_auction()
+* determine_winner()
+* refund_losers()
+* create_delivery_period()
+SettlementService
+* request_deposit_refund()
+* submit_rating()
+* process_commissions()
+* process_refunds()
+* close_final_auction()
+RatingAlertService
+* evaluate_rating()
+* open_issue_report()
+* freeze_deposit()
+* create_alert()
+* escalate_dispute()
+NotificationService
+* send_sms()
+* send_email()
+* send_push()
+* send_in_app()
+________________
+
+
+12) Realtime Design للمزايدة
+هذا الجزء لازم ينبنى بحذر.
+المطلوب
+* broadcast للسعر الحالي
+* broadcast لوقت النهاية
+* broadcast لعدد المشاركين
+* event “you are highest bidder”
+* event “you have been outbid”
+تقنيًا
+* WebSocket room لكل auction
+* users join channel: auction:{id}
+أحداث مهمة
+* auction.updated
+* bid.accepted
+* bid.rejected
+* auction.extended
+* auction.closed
+أهم نقطة
+لا تعتمد على الـ frontend لتحديد السعر النهائي
+كل قرار لازم يكون من backend فقط.
+________________
+
+
+13) Concurrency Design
+هذا أخطر شيء في المشروع.
+المشكلة
+إذا شخصين عملوا bid بنفس الثانية:
+* مين الأول؟
+* كيف تمنع double highest bid؟
+* كيف تمنع overwrite؟
+الحل
+استخدم واحد من هذول:
+الخيار الأفضل في Django/Postgres
+* DB transaction
+* SELECT ... FOR UPDATE على auction row
+* إعادة التحقق من current_price داخل transaction
+* ثم إدخال bid
+* ثم تحديث auction.current_price
+قاعدة مهمة
+كل bid لازم يتنفذ داخل atomic transaction
+________________
+
+
+14) Payment Design
+لازم تعمل abstraction layer:
+لا تعمل هيك
+* business logic جوّا callback تبع gateway مباشرة
+اعمل هيك
+* PaymentTransaction
+* PaymentProviderAdapter
+* PaymentWebhookHandler
+* PaymentReconciliationService
+أنواع العمليات
+* رسوم نشر المزاد
+* رسوم الاشتراك
+* تأمين
+* استرجاع
+* مصادرة
+* عمولة
+________________
+
+
+15) Media Design
+الملف يوضح وجود:
+* صور
+* فيديو
+* مرفقات
+* فحص
+* احتمالية blur للصور
+لذلك:
+لا تخزن الملفات داخل DB
+خزن فقط:
+* path
+* type
+* metadata
+________________
+
+
+16) Audit & Compliance
+بما أن المشروع فيه:
+* فلوس
+* مراجعات
+* رفض / قبول
+* حظر
+* تأمينات
+فلازم يكون عندك audit_logs قوي جدًا.
+سجل:
+* من وافق
+* من رفض
+* متى تم تغيير الحالة
+* من عدل السعر
+* من نفذ refund
+* من جمد تأمين
+________________
+
+
+17) Security Design
+أساسي جدًا
+* OTP hashing
+* Password hashing
+* Rate limiting على OTP
+* Rate limiting على bids
+* CSRF / JWT / session strategy واضحة
+* IP logging
+* Device fingerprinting لاحقًا
+* منع bid spam
+* التحقق من صلاحيات كل endpoint
+قواعد مهمة
+* user العادي لا يقرأ بيانات staff
+* bidder لا يرى bidder آخر
+* seller لا يغيّر bid history
+* admin actions audited
+________________
+
+
+18) Suggested APIs
+Auth
+* POST /api/auth/register
+* POST /api/auth/verify-phone
+* POST /api/auth/verify-email
+* POST /api/auth/login
+* POST /api/auth/forgot-password
+Auctions
+* POST /api/auction-requests/
+* GET /api/auction-requests/my
+* POST /api/auction-requests/{id}/submit
+* GET /api/auctions/
+* GET /api/auctions/{id}
+Review
+* POST /api/reviews/{request_id}/approve
+* POST /api/reviews/{request_id}/reject
+* POST /api/reviews/{request_id}/return
+Subscription
+* POST /api/auctions/{id}/subscribe
+* POST /api/subscriptions/{id}/pay
+Bidding
+* POST /api/auctions/{id}/bids
+* GET /api/auctions/{id}/bids
+Settlement
+* POST /api/auctions/{id}/refund-request
+* POST /api/auctions/{id}/ratings
+________________
+
+
+19) MVP Architecture
+أنصح تبدأ بهيك
+Phase 1 - MVP
+* User registration/login
+* Auction request creation
+* Admin review
+* Publish auction
+* Subscription with payment
+* Basic bidding
+* Auction closure
+* Winner selection
+* Manual settlement
+Phase 2
+* Auto extension
+* Full realtime
+* Refund automation
+* Rating alerts
+* Freeze / ban workflow
+* Advanced dashboards
+Phase 3
+* Analytics
+* Fraud detection
+* Recommendation engine
+* dynamic reserve pricing
+* smart category rules
+________________
+
+
+20) أخطر 5 أخطاء لازم تتجنبها
+1. تخلط بين auction_request و auction
+لازم يكونوا كيانين منفصلين.
+2. تعتبر الاشتراك = مزايدة
+لا. الاشتراك شيء، والمزايدة شيء آخر.
+3. تربط business logic بالfrontend
+كل قواعد المزاد لازم تكون backend-driven.
+4. تهمل audit logs
+هذا سيعمل مشاكل كبيرة لاحقًا.
+5. تبدأ realtime من أول يوم
+ابدأ logic صح أولًا، ثم realtime.
+________________
+
+
+21) الخلاصة المعمارية
+أفضل تقسيم لك:
+* IAM module
+* Auction Request module
+* Auction Live module
+* Subscription module
+* Bidding Engine
+* Settlement module
+* Ratings & Disputes
+* Payments
+* Notifications
+* Admin Config
+والـ core entity lifecycle عندك:
+User
+-> AuctionRequest
+-> Auction
+-> Subscription
+-> Bid
+-> AuctionResult
+-> DeliveryPeriod
+-> Settlement
+-> Rating/Alert
+وهذا متماشي جدًا مع تفاصيل حالات الاستخدام المكتوبة في الملف، خاصة الإنشاء، المراجعة، الاشتراك، المزايدة، الإغلاق، والتقييم
+________________

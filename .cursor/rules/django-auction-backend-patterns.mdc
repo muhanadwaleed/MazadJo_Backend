@@ -1,0 +1,15 @@
+---
+description: Django and DRF implementation patterns for MazadJo backend modules
+globs: "{accounts,auction_requests,auctions,bidding,payments,notifications,settlements,fraud,audit}/**/*.py"
+alwaysApply: false
+---
+
+# Django Backend Patterns
+
+- Prefer service-layer orchestration for domain workflows (validation, state transitions, side effects), keeping views thin.
+- Use explicit permission checks for staff-only and owner-only actions; do not infer role from client inputs.
+- Keep DB writes in atomic transactions for critical flows (bids, publish, closure, settlement).
+- Use idempotency for repeatable write operations where duplicate requests are likely (bid submit, payment callbacks).
+- Emit asynchronous side effects (notifications, risk analysis, reconciliation) through Celery tasks after committed writes.
+- Preserve API consistency with `/api/v1/` contracts and existing pagination strategy (page-number vs cursor for bids).
+- Add or update tests when changing business rules in bidding, review/publish workflow, payments, or settlement.
