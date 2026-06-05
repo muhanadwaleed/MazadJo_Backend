@@ -105,6 +105,8 @@ AUTH_USER_MODEL = "accounts.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # WhiteNoise must be directly after SecurityMiddleware to serve static files
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -290,6 +292,15 @@ USE_TZ = True
 
 STATIC_URL = env("STATIC_URL", default="static/")
 STATIC_ROOT = env("STATIC_ROOT", default=str(BASE_DIR / "staticfiles"))
+# Serve compressed & fingerprinted static files via WhiteNoise
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 MEDIA_URL = env("MEDIA_URL", default="media/")
 MEDIA_ROOT = env("MEDIA_ROOT", default=str(BASE_DIR / "media"))
