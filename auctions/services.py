@@ -2,12 +2,14 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from auctions.models import Auction, AuctionReviewLog
-from auctions.validation import SELLER_CANCELLABLE_STATUSES, validate_publish_schedule
+from auctions.validation import SELLER_CANCELLABLE_STATUSES
 from audit.services import log_audit
 from configuration.services.review_checklist import validate_review_checklist_complete
 
 
 def maybe_close_auction(auction: Auction) -> bool:
+    if auction.ends_at is None:
+        return False
     now = timezone.now()
     if auction.ends_at >= now:
         return False
@@ -74,35 +76,6 @@ def perform_staff_review(
         action=f"staff_review_{decision}",
         old_values={"status": old_status},
         new_values={"status": auction.status, "reason": reason},
-        request=request,
-    )
-    return auction
-
-
-def perform_staff_publish(auction: Auction, *, publisher, request=None) -> Auction:
-    if auction.status != Auction.Status.APPROVED:
-        raise DRFValidationError(
-            {"status": ["Auction must be approved before publishing."]}
-        )
-
-    validate_publish_schedule(auction)
-
-    old_status = auction.status
-    if not auction.origin_deadline:
-        auction.origin_deadline = auction.ends_at
-    auction.status = Auction.Status.SCHEDULED
-    auction.save(update_fields=["status", "origin_deadline", "updated_at"])
-
-    log_audit(
-        actor=publisher,
-        entity_type="auction",
-        entity_id=auction.id,
-        action="staff_publish",
-        old_values={"status": old_status},
-        new_values={
-            "status": auction.status,
-            "origin_deadline": auction.origin_deadline.isoformat(),
-        },
         request=request,
     )
     return auction

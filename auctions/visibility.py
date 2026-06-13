@@ -15,6 +15,12 @@ PUBLIC_BROWSE_STATUSES = (
     Auction.Status.CANCELLED,
 )
 
+# Public "Ended" filter includes auctions that closed with or without bids.
+PUBLIC_ENDED_STATUSES = (
+    Auction.Status.ENDED,
+    Auction.Status.ENDED_WITHOUT_BIDS,
+)
+
 DETAIL_ACTIONS = frozenset(
     {
         "retrieve",
@@ -24,7 +30,6 @@ DETAIL_ACTIONS = frozenset(
         "submit",
         "watchlist",
         "staff_review",
-        "staff_publish",
         "review_checklist",
         "media_upload",
         "media_detail",
@@ -51,6 +56,8 @@ def _apply_status_filter(
 ) -> QuerySet[Auction]:
     if not status:
         return qs
+    if status == Auction.Status.ENDED:
+        return qs.filter(status__in=PUBLIC_ENDED_STATUSES)
     if allow_any:
         return qs.filter(status=status)
     if status in PUBLIC_BROWSE_STATUSES:

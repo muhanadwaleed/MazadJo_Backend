@@ -11,7 +11,7 @@ This folder holds **per-component handoff guides** for the web app. Start here (
 | 3 | [03-listings-and-media.md](03-listings-and-media.md) | Ready |
 | 3 (CMS) | [03-cms-and-configuration.md](03-cms-and-configuration.md) | Ready |
 | 4 | [04-auction-lifecycle.md](04-auction-lifecycle.md) | Ready |
-| 5 | [05-subscriptions-and-payments.md](05-subscriptions-and-payments.md) | Planned |
+| 5 | [05-subscriptions-and-payments.md](05-subscriptions-and-payments.md) | Ready |
 | 6 | [06-live-bidding-realtime.md](06-live-bidding-realtime.md) | Planned |
 | 7 | [07-post-auction-settlement.md](07-post-auction-settlement.md) | Planned |
 | 8 | [08-trust-and-operations.md](08-trust-and-operations.md) | Planned |
@@ -206,4 +206,4 @@ async rewrites() {
 - [ ] (Optional) `seed_demo_auctions` + login as `demo_seller`
 - [ ] (Optional) Redis + Daphne for WebSocket bidding tests
 
-Next: **[Phase 4 — Auction lifecycle](04-auction-lifecycle.md)** (complete). Then **Phase 5 — Subscriptions and payments**.
+Next: **[Phase 5 — Subscriptions and payments](05-subscriptions-and-payments.md)** (complete). Then **Phase 6 — Live bidding**.

@@ -47,8 +47,7 @@ class AuctionDraftApiTests(TestCase):
             "area": self.area.id,
             "start_price": "1000.00",
             "min_bid_increment": "50.00",
-            "starts_at": (self.now + timedelta(days=1)).isoformat(),
-            "ends_at": (self.now + timedelta(days=2)).isoformat(),
+            "duration_days": 7,
         }
 
     def test_create_draft_requires_auth(self):
@@ -81,8 +80,7 @@ class AuctionDraftApiTests(TestCase):
             start_price=Decimal("100"),
             current_price=Decimal("100"),
             min_bid_increment=Decimal("10"),
-            starts_at=self.now + timedelta(days=1),
-            ends_at=self.now + timedelta(days=2),
+            duration_days=7,
         )
         url = reverse("auction-detail", args=[a.id])
         r = self.client.patch(
@@ -104,8 +102,7 @@ class AuctionDraftApiTests(TestCase):
             start_price=Decimal("100"),
             current_price=Decimal("100"),
             min_bid_increment=Decimal("10"),
-            starts_at=self.now + timedelta(days=1),
-            ends_at=self.now + timedelta(days=2),
+            duration_days=7,
         )
         url = reverse("auction-detail", args=[a.id])
         r = self.client.patch(url, {"title": "Hacked"}, format="json")
@@ -126,8 +123,7 @@ class AuctionDraftApiTests(TestCase):
             start_price=Decimal("10"),
             current_price=Decimal("10"),
             min_bid_increment=Decimal("1"),
-            starts_at=self.now + timedelta(days=1),
-            ends_at=self.now + timedelta(days=2),
+            duration_days=7,
         )
         Auction.objects.create(
             seller=self.other,
@@ -138,8 +134,7 @@ class AuctionDraftApiTests(TestCase):
             start_price=Decimal("20"),
             current_price=Decimal("20"),
             min_bid_increment=Decimal("1"),
-            starts_at=self.now + timedelta(days=1),
-            ends_at=self.now + timedelta(days=2),
+            duration_days=7,
         )
         self.client.force_authenticate(self.seller)
         url = reverse("auction-list")
@@ -158,8 +153,7 @@ class AuctionDraftApiTests(TestCase):
             start_price=Decimal("10"),
             current_price=Decimal("10"),
             min_bid_increment=Decimal("1"),
-            starts_at=self.now + timedelta(days=1),
-            ends_at=self.now + timedelta(days=2),
+            duration_days=7,
         )
         Auction.objects.create(
             seller=self.other,
@@ -170,8 +164,7 @@ class AuctionDraftApiTests(TestCase):
             start_price=Decimal("20"),
             current_price=Decimal("20"),
             min_bid_increment=Decimal("1"),
-            starts_at=self.now + timedelta(days=1),
-            ends_at=self.now + timedelta(days=2),
+            duration_days=7,
         )
         url = reverse("auction-list")
         self.client.force_authenticate(self.other)

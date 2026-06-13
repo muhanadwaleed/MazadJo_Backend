@@ -47,7 +47,9 @@ class PlaceBidAntiSnipingTests(TestCase):
         AuctionSubscription.objects.create(
             auction=self.auction,
             user=self.bidder,
+            insurance_fee=Decimal("0"),
             subscription_fee=Decimal("1"),
+            total_fee=Decimal("1"),
             status=AuctionSubscription.Status.ACTIVE,
             payment_status=AuctionSubscription.PaymentStatus.PAID,
         )

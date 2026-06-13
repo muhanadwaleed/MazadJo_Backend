@@ -2,12 +2,13 @@ from django.utils import timezone
 
 from payments.models import PaymentTransaction
 from subscriptions.models import AuctionSubscription
+from subscriptions.services import activate_subscription_payment
 
 
 def ensure_payment_for_subscription(
     subscription: AuctionSubscription,
 ) -> PaymentTransaction:
-    amount = subscription.subscription_fee
+    amount = subscription.total_fee
     return PaymentTransaction.objects.create(
         user=subscription.user,
         related_entity_type=PaymentTransaction.RelatedEntityType.SUBSCRIPTION,
@@ -19,7 +20,7 @@ def ensure_payment_for_subscription(
     )
 
 
-def sync_subscription_payment_state(tx: PaymentTransaction) -> None:
+def sync_subscription_payment_state(tx: PaymentTransaction, *, request=None) -> None:
     if tx.related_entity_type != PaymentTransaction.RelatedEntityType.SUBSCRIPTION:
         return
     if tx.status not in (
@@ -28,13 +29,11 @@ def sync_subscription_payment_state(tx: PaymentTransaction) -> None:
     ):
         return
     try:
-        sub = AuctionSubscription.objects.get(pk=tx.related_entity_id)
+        sub = AuctionSubscription.objects.select_related("auction").get(
+            pk=tx.related_entity_id
+        )
     except AuctionSubscription.DoesNotExist:
         return
     if sub.status == AuctionSubscription.Status.PENDING_PAYMENT:
-        sub.status = AuctionSubscription.Status.ACTIVE
-        sub.payment_status = AuctionSubscription.PaymentStatus.PAID
-        sub.activated_at = timezone.now()
-        sub.save(
-            update_fields=["status", "payment_status", "activated_at", "updated_at"]
-        )
+        paid_at = tx.completed_at or timezone.now()
+        activate_subscription_payment(sub, paid_at=paid_at, request=request)

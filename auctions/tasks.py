@@ -12,6 +12,7 @@ def close_due_auctions() -> int:
     ids = list(
         Auction.objects.filter(
             status__in=(Auction.Status.ACTIVE, Auction.Status.SCHEDULED),
+            ends_at__isnull=False,
             ends_at__lt=now,
         ).values_list("pk", flat=True)[:500]
     )

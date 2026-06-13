@@ -16,8 +16,6 @@ from audit.models import AuditLog
 from catalog.models import Area, City, Country, ProductSettings
 from catalog.tests.helpers import create_test_category
 from configuration.models import ProductCategoryChecklist, ReviewChecklistItem
-from configuration.services.review_checklist import ensure_auction_review_checklist
-
 User = get_user_model()
 
 TINY_PNG = (
@@ -71,8 +69,7 @@ class AuctionLifecycleApiTests(TestCase):
             start_price=Decimal("1000"),
             current_price=Decimal("1000"),
             min_bid_increment=Decimal("50"),
-            starts_at=self.now + timedelta(days=2),
-            ends_at=self.now + timedelta(days=3),
+            duration_days=7,
         )
 
     def _add_image(self, auction):
@@ -149,38 +146,6 @@ class AuctionLifecycleApiTests(TestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertEqual(r.data["status"], Auction.Status.APPROVED)
-
-    def test_publish_sets_scheduled_and_origin_deadline(self):
-        auction = self._create_draft()
-        self._add_image(auction)
-        self._submit(auction)
-        ensure_auction_review_checklist(auction)
-        row = auction.review_checklist_items.get()
-        self.client.force_authenticate(self.staff)
-        self.client.patch(
-            reverse("auction-review-checklist", args=[auction.id]),
-            {"id": row.id, "is_checked": True},
-            format="json",
-        )
-        self.client.post(
-            reverse("auction-staff-review", args=[auction.id]),
-            {"decision": "approve"},
-            format="json",
-        )
-        r = self.client.post(reverse("auction-staff-publish", args=[auction.id]))
-        self.assertEqual(r.status_code, status.HTTP_200_OK)
-        self.assertEqual(r.data["status"], Auction.Status.SCHEDULED)
-        self.assertIsNotNone(r.data["origin_deadline"])
-
-    def test_publish_succeeds_when_starts_at_in_past(self):
-        auction = self._create_draft()
-        auction.status = Auction.Status.APPROVED
-        auction.starts_at = self.now - timedelta(hours=1)
-        auction.save(update_fields=["status", "starts_at"])
-        self.client.force_authenticate(self.staff)
-        r = self.client.post(reverse("auction-staff-publish", args=[auction.id]))
-        self.assertEqual(r.status_code, status.HTTP_200_OK)
-        self.assertEqual(r.data["status"], Auction.Status.SCHEDULED)
 
     def test_seller_cancel_draft(self):
         auction = self._create_draft()
