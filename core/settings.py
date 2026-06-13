@@ -170,27 +170,38 @@ else:
     }
 
 
+def _redis_celery_broker_url(redis_url: str) -> str:
+    u = redis_url.rstrip("/")
+    if u.endswith("/0"):
+        return u[:-2] + "/1"
+    if "/" not in u.split("://", 1)[-1]:
+        return u + "/1"
+    return u.rsplit("/", 1)[0] + "/1"
+
+
 def _default_celery_broker() -> str:
     explicit = env("CELERY_BROKER_URL", default="").strip()
     if explicit:
         return explicit
     if REDIS_URL:
-        u = REDIS_URL.rstrip("/")
-        if u.endswith("/0"):
-            return u[:-2] + "/1"
-        if "/" not in u.split("://", 1)[-1]:
-            return u + "/1"
-        return u.rsplit("/", 1)[0] + "/1"
-    return "redis://127.0.0.1:6379/1"
+        return _redis_celery_broker_url(REDIS_URL)
+    # No Redis: in-process eager tasks must not import kombu Redis transport.
+    return "memory://"
+
+
+def _default_celery_result_backend(broker_url: str) -> str:
+    if broker_url.startswith("memory://"):
+        return "cache+memory://"
+    return broker_url
 
 
 CELERY_BROKER_URL = _default_celery_broker()
 CELERY_RESULT_BACKEND = (
     env(
         "CELERY_RESULT_BACKEND",
-        default=CELERY_BROKER_URL,
+        default=_default_celery_result_backend(CELERY_BROKER_URL),
     ).strip()
-    or CELERY_BROKER_URL
+    or _default_celery_result_backend(CELERY_BROKER_URL)
 )
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"

@@ -8,6 +8,7 @@ psycopg[binary]>=3.2,<4
 # Celery: eager in-process when REDIS_URL unset (OTP, beat schedules via DB)
 celery>=5.4,<6
 django-celery-beat>=2.6,<3
+redis>=5.0,<6
 # ASGI stack (HTTP + WebSocket routes; in-memory channel layer without Redis)
 channels[daphne]>=4.0,<5
 # Metrics route is registered but disabled unless ENABLE_PROMETHEUS_METRICS=True
