@@ -2,7 +2,11 @@ from rest_framework import serializers
 
 from auctions.media_urls import auction_media_serve_url
 from auctions.models import Auction, AuctionMedia, AuctionWatchlist
-from auctions.validation import default_min_bid_increment, validate_auction_fields
+from auctions.validation import (
+    default_min_bid_increment,
+    validate_auction_fields,
+    validate_duration_days,
+)
 from catalog.models import ProductSettings
 
 
@@ -48,8 +52,7 @@ class AuctionWriteSerializer(serializers.ModelSerializer):
             "start_price",
             "reserve_price",
             "min_bid_increment",
-            "starts_at",
-            "ends_at",
+            "duration_days",
             "is_anonymous_bidding",
         )
         read_only_fields = (
@@ -60,6 +63,10 @@ class AuctionWriteSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def validate_duration_days(self, value):
+        validate_duration_days(value)
+        return value
 
     def validate_product_category(self, category):
         if not ProductSettings.objects.filter(category=category).exists():
@@ -119,6 +126,7 @@ class AuctionListSerializer(serializers.ModelSerializer):
             "start_price",
             "current_price",
             "min_bid_increment",
+            "duration_days",
             "starts_at",
             "ends_at",
             "participants_count",
@@ -156,6 +164,7 @@ class AuctionDetailSerializer(serializers.ModelSerializer):
             "current_price",
             "reserve_price",
             "min_bid_increment",
+            "duration_days",
             "starts_at",
             "ends_at",
             "origin_deadline",

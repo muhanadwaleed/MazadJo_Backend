@@ -8,7 +8,7 @@ Base path: `/api/v1/` (JWT and domain APIs live under this prefix; older `/api/a
 
 - **Pagination**: page number with `page` / `page_size` for most list endpoints; **bid history** uses **cursor** pagination (`cursor`, `page_size`) for stable feeds under load.
 - **Payment webhooks**: one generic HMAC-signed endpoint; map gateway-specific payloads in the Celery task as providers are integrated.
-- **Staff-only shortcuts**: `POST /subscriptions/{id}/mark_paid/` exists for staging and reconciliation without a real gateway.
+- **Staging payment simulation**: `POST /subscriptions/{id}/mark_paid/` lets the subscription owner mark their row paid without a real gateway (staff can still mark any subscription).
 - **Celery beat**: schedules live in the database via **django-celery-beat** (`CELERY_BEAT_SCHEDULER=DatabaseScheduler`). Run `python manage.py seed_celery_beat` after migrations to create default periodic tasks (OTP cleanup, notification email sweep, auction close sweep, **fraud risk-score decay** `fraud.tasks.decay_risk_scores`, etc.).
 - **Anti-sniping**: when `auction_extension_enabled`, extend if time left is within `extension_trigger_seconds` **or** under `ANTI_SNIPE_FORCE_SECONDS` (default 10s). Extension adds `extension_minutes` to `ends_at`, increments `extension_count`, and updates `extend_deadline`.
 - **Auction close**: not only Celery — `maybe_close_auction` runs on **bid placement** (after locking the auction), on **GET auction detail** (`retrieve`), and via **`auctions.tasks.close_due_auctions`** (beat every ~60s after `seed_celery_beat`).
@@ -250,7 +250,7 @@ Fees, terms, and staff review checklist templates. Handoff: [integrations/03-cms
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/auctions/` | Public | List; filters: `status`, `category`, `area`, `search` (title + description). Default list shows **public browse statuses** only (`scheduled`, `active`, `ended`, …). **`status`** for pre-publish states (`draft`, `under_review`, `approved`, …) is **staff-only** (others get an empty list). **`mine=1`**: authenticated seller’s auctions (any status). **`seller=<user_id>`**: staff only. List rows include **`primary_media_url`** (first image serve URL or `null`). |
-| POST | `/auctions/` | User | Create **draft** auction (seller). Body: `product_category`, `title`, `description`, `area`, `location_link`, `start_price`, `reserve_price`, `min_bid_increment`, `starts_at`, `ends_at`, `is_anonymous_bidding`. Server sets `auction_number`, `current_price=start_price`, `status=draft`. **`min_bid_increment`** defaults from category `settings` when omitted. Validates `min_start_price`, `reserve_price_required`, `location_link_enabled`. |
+| POST | `/auctions/` | User | Create **draft** auction (seller). Body: `product_category`, `title`, `description`, `area`, `location_link`, `start_price`, `reserve_price`, `min_bid_increment`, **`duration_days`**, `is_anonymous_bidding`. Server sets `auction_number`, `current_price=start_price`, `status=draft`. **`starts_at` / `ends_at`** are null until seller payment activates the listing. **`min_bid_increment`** defaults from category `settings` when omitted. |
 | GET | `/auctions/{id}/` | Public | Detail with **`media_items`** metadata (`url` only — no `file_data`). Increments **`views_count`**. Triggers **close-if-past-end** before response. |
 | PUT/PATCH | `/auctions/{id}/` | Owner | Update auction only in `draft` or `returned_for_edit`. Category settings validated on save. |
 | POST | `/auctions/{id}/media/` | Owner | **Multipart** upload: `file`, `media_type` (`image` \| `video` \| `file`), optional `sort_order`, `is_blurred`. Owner only in `draft` / `returned_for_edit`. Max size **`AUCTION_MEDIA_MAX_BYTES`** (default 10 MB). Returns metadata + **`url`** serve path. |
@@ -259,11 +259,10 @@ Fees, terms, and staff review checklist templates. Handoff: [integrations/03-cms
 | POST | `/auctions/{id}/submit/` | Owner | Move auction from `draft`/`returned_for_edit` to `under_review`. Validates fields + **`min_images_count`** (and related media rules) before transition. Snapshots category review checklist onto the auction. |
 | GET/PATCH | `/auctions/{id}/review-checklist/` | Staff | List per-auction checklist rows (from configuration templates); PATCH body: `{"id": <row_id>, "is_checked": true\|false}`. |
 | POST | `/auctions/{id}/staff/review/` | Staff | Body: `decision` (`approve` / `reject` / `return_for_edit`), optional `reason`. Auction must be `under_review`. **`approve`** requires all checklist rows checked. Writes audit log. |
-| POST | `/auctions/{id}/staff/publish/` | Staff | Publish approved auction (`status=scheduled`). Validates `ends_at` > `starts_at`. Sets `origin_deadline` if unset. Writes audit log. |
 | POST | `/auctions/{id}/cancel/` | Owner | **Seller only** (not staff). Cancels in `draft`, `returned_for_edit`, `under_review`, `approved`, or `scheduled`. Optional body: `reason`. Writes audit log. |
 | POST/DELETE | `/auctions/{id}/watchlist/` | User | Add or remove watchlist entry. |
 | GET | `/auctions/{id}/bids/` | Public | Bid history (**public bids only**; suppressed shadow bids are omitted): **cursor** pagination (`cursor`, `page_size`). Optional **`since`** (ISO 8601) for polling — only bids with `created_at` greater than `since`. List fields: **`id`**, **`amount`**, masked **`bidder`**, **`timestamp`**. |
-| POST | `/auctions/{id}/bids/` | User | Place bid. Header **`Idempotency-Key`** optional (duplicate POST returns same bid). Body: `amount`, **`bid_source`** (`manual` \| `quick_increment`, default `manual`). Response **201** with bid JSON; behavior for restricted users depends on **`SHADOW_BID_SILENT_PUBLICATION`** (see methodology above). |
+| POST | `/auctions/{id}/bids/` | User | Place bid. Requires **active** subscription for this auction. Without it: **403** `subscription_required`. Header **`Idempotency-Key`** optional. Body: `amount`, **`bid_source`** (`manual` \| `quick_increment`, default `manual`). |
 
 ## Real-time (WebSocket)
 
@@ -282,16 +281,21 @@ Connection requires a valid JWT and the auction must exist and not be **cancelle
 
 ## Subscriptions
 
+**Staging-only payments** — no gateway checkout in MVP. Handoff: [integrations/05-subscriptions-and-payments.md](integrations/05-subscriptions-and-payments.md).
+
+Fees from `auction.product_category.fees_configuration`: **seller** pays `seller_insurance_amount + subscription_amount` when `approved`; **bidder** pays `bidder_insurance_amount + subscription_amount` when auction is `active`. No `role` field — inferred from `auction.seller_id`.
+
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET/POST | `/subscriptions/` | User | List own; create pending subscription (creates linked `PaymentTransaction` with `provider_reference`). |
-| POST | `/subscriptions/{id}/mark_paid/` | Staff | Mark subscription paid and payment succeeded (for staging / reconciliation). |
+| GET | `/subscriptions/` | User | List own (staff: all). Filters: `?auction=<id>`, `?status=`. |
+| POST | `/subscriptions/` | User | Body: `{"auction": <id>}`. Optional **`Idempotency-Key`**. Returns `insurance_fee`, `subscription_fee`, `total_fee`, `participant_type`, nested `payment_transaction`. Seller payment (when activated) sets auction `active` and `ends_at = paid_at + duration_days`. |
+| POST | `/subscriptions/{id}/mark_paid/` | User (own subscription; staff: any) | Staging simulation: mark paid; activates subscription; seller payment also activates auction. Idempotent if already `active`. |
 
 ## Payments
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/payments/transactions/` | User | Own transactions (all for staff). |
+| GET | `/payments/transactions/` | User | Own transactions (staff: all). Filter: `?auction=<id>`. |
 
 ### Payment webhook (Celery)
 
@@ -338,7 +342,7 @@ Email delivery for pending rows is queued by a periodic task (`notifications.tas
 From the project root:
 
 ```bash
-.venv/bin/python manage.py test accounts.tests.test_api_integration accounts.tests.test_auth_phase1 auctions.test_draft_list_api auctions.test_media_api auctions.test_lifecycle_api auctions.test_watchlist_api bidding.tests -v2
+.venv/bin/python manage.py test accounts.tests.test_api_integration accounts.tests.test_auth_phase1 auctions.test_draft_list_api auctions.test_media_api auctions.test_lifecycle_api auctions.test_watchlist_api subscriptions.tests bidding.tests -v2
 ```
 
 Or run `docs/run_api_tests.sh`.
@@ -346,5 +350,5 @@ Or run `docs/run_api_tests.sh`.
 With **pytest** (after `pip install -r requirements.txt`):
 
 ```bash
-DJANGO_SETTINGS_MODULE=core.settings .venv/bin/python -m pytest accounts/tests auctions/test_draft_list_api.py auctions/test_media_api.py auctions/test_lifecycle_api.py auctions/test_watchlist_api.py bidding/tests -q
+DJANGO_SETTINGS_MODULE=core.settings .venv/bin/python -m pytest accounts/tests auctions/test_draft_list_api.py auctions/test_media_api.py auctions/test_lifecycle_api.py auctions/test_watchlist_api.py subscriptions/tests bidding/tests -q
 ```

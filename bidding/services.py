@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from accounts.stats import increment_user_public_bid_count
+from bidding.exceptions import SubscriptionRequired
 from auctions.models import Auction
 from auctions.realtime import broadcast_auction_event
 from auctions.services import maybe_close_auction
@@ -73,10 +74,10 @@ def place_bid(
     if maybe_close_auction(auction):
         auction.refresh_from_db()
     now = timezone.now()
-    if auction.starts_at > now:
-        raise ValidationError("Auction has not started yet.")
-    if auction.ends_at < now:
+    if auction.ends_at is None or auction.ends_at < now:
         raise ValidationError("Auction is not open for bidding.")
+    if auction.starts_at is not None and auction.starts_at > now:
+        raise ValidationError("Auction has not started yet.")
     if auction.status in (
         Auction.Status.CANCELLED,
         Auction.Status.CLOSED,
@@ -84,9 +85,6 @@ def place_bid(
         Auction.Status.ENDED_WITHOUT_BIDS,
     ):
         raise ValidationError("Auction is not accepting bids.")
-    if auction.status == Auction.Status.SCHEDULED:
-        auction.status = Auction.Status.ACTIVE
-        auction.save(update_fields=["status", "updated_at"])
     if auction.status != Auction.Status.ACTIVE:
         raise ValidationError("Auction is not active.")
 
@@ -125,7 +123,7 @@ def place_bid(
             status=AuctionSubscription.Status.ACTIVE,
         )
     except AuctionSubscription.DoesNotExist as e:
-        raise ValidationError("Active subscription required to bid.") from e
+        raise SubscriptionRequired() from e
 
     if amount <= auction.current_price:
         logger.warning(

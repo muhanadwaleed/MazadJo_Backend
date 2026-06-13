@@ -25,6 +25,8 @@ class SubscriptionFeeFromConfigurationTests(TestCase):
             name_ar="ف",
             fees_name="Subscription fee test",
             subscription_amount=Decimal("7.50"),
+            bidder_insurance=Decimal("2.00"),
+            seller_insurance=Decimal("1.00"),
         )
         ProductSettings.objects.create(category=self.category)
         now = timezone.now()
@@ -37,12 +39,13 @@ class SubscriptionFeeFromConfigurationTests(TestCase):
             start_price=Decimal("10"),
             current_price=Decimal("10"),
             min_bid_increment=Decimal("1"),
+            duration_days=7,
             starts_at=now - timedelta(hours=1),
             ends_at=now + timedelta(hours=1),
         )
         self.client.force_authenticate(self.bidder)
 
-    def test_subscription_uses_fees_configuration_amount(self):
+    def test_bidder_subscription_uses_insurance_plus_subscription(self):
         response = self.client.post(
             "/api/v1/subscriptions/",
             {"auction": self.auction.id},
@@ -51,3 +54,48 @@ class SubscriptionFeeFromConfigurationTests(TestCase):
         self.assertEqual(response.status_code, 201)
         sub = AuctionSubscription.objects.get(pk=response.data["id"])
         self.assertEqual(sub.subscription_fee, Decimal("7.50"))
+        self.assertEqual(sub.insurance_fee, Decimal("2.00"))
+        self.assertEqual(sub.total_fee, Decimal("9.50"))
+
+    def test_idempotency_key_scoped_to_auction(self):
+        now = timezone.now()
+        other_auction = Auction.objects.create(
+            seller=self.seller,
+            product_category=self.category,
+            auction_number=uuid.uuid4().hex[:12].upper(),
+            title="B",
+            status=Auction.Status.ACTIVE,
+            start_price=Decimal("10"),
+            current_price=Decimal("10"),
+            min_bid_increment=Decimal("1"),
+            duration_days=7,
+            starts_at=now - timedelta(hours=1),
+            ends_at=now + timedelta(hours=1),
+        )
+        idem_key = "shared-client-key"
+        first = self.client.post(
+            "/api/v1/subscriptions/",
+            {"auction": self.auction.id},
+            format="json",
+            HTTP_IDEMPOTENCY_KEY=idem_key,
+        )
+        self.assertEqual(first.status_code, 201)
+
+        second = self.client.post(
+            "/api/v1/subscriptions/",
+            {"auction": other_auction.id},
+            format="json",
+            HTTP_IDEMPOTENCY_KEY=idem_key,
+        )
+        self.assertEqual(second.status_code, 201)
+        self.assertNotEqual(second.data["id"], first.data["id"])
+        self.assertEqual(second.data["auction"], other_auction.id)
+
+        replay = self.client.post(
+            "/api/v1/subscriptions/",
+            {"auction": other_auction.id},
+            format="json",
+            HTTP_IDEMPOTENCY_KEY=idem_key,
+        )
+        self.assertEqual(replay.status_code, 201)
+        self.assertEqual(replay.data["id"], second.data["id"])

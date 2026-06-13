@@ -58,8 +58,7 @@ class AuctionMediaApiTests(TestCase):
             start_price=Decimal("1000"),
             current_price=Decimal("1000"),
             min_bid_increment=Decimal("50"),
-            starts_at=self.now + timedelta(days=1),
-            ends_at=self.now + timedelta(days=2),
+            duration_days=7,
         )
 
     def _upload_url(self, auction_id=None):
@@ -131,7 +130,9 @@ class AuctionMediaApiTests(TestCase):
 
     def test_serve_media_public_when_scheduled(self):
         self.auction.status = Auction.Status.SCHEDULED
-        self.auction.save(update_fields=["status"])
+        self.auction.starts_at = self.now - timedelta(hours=1)
+        self.auction.ends_at = self.now + timedelta(days=1)
+        self.auction.save(update_fields=["status", "starts_at", "ends_at"])
         media = AuctionMedia.objects.create(
             auction=self.auction,
             media_type=AuctionMedia.MediaType.IMAGE,
@@ -181,7 +182,9 @@ class AuctionMediaApiTests(TestCase):
             sort_order=0,
         )
         self.auction.status = Auction.Status.ACTIVE
-        self.auction.save(update_fields=["status"])
+        self.auction.starts_at = self.now - timedelta(hours=1)
+        self.auction.ends_at = self.now + timedelta(days=1)
+        self.auction.save(update_fields=["status", "starts_at", "ends_at"])
         r = self.client.get(reverse("auction-list"))
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         row = r.data["results"][0]
@@ -219,7 +222,9 @@ class AuctionMediaApiTests(TestCase):
 
     def test_search_matches_description(self):
         self.auction.status = Auction.Status.ACTIVE
-        self.auction.save(update_fields=["status"])
+        self.auction.starts_at = self.now - timedelta(hours=1)
+        self.auction.ends_at = self.now + timedelta(days=1)
+        self.auction.save(update_fields=["status", "starts_at", "ends_at"])
         r = self.client.get(reverse("auction-list"), {"search": "vintage"})
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertEqual(len(r.data["results"]), 1)
@@ -234,7 +239,9 @@ class AuctionMediaApiTests(TestCase):
 
     def test_views_count_increments_on_retrieve(self):
         self.auction.status = Auction.Status.ACTIVE
-        self.auction.save(update_fields=["status"])
+        self.auction.starts_at = self.now - timedelta(hours=1)
+        self.auction.ends_at = self.now + timedelta(days=1)
+        self.auction.save(update_fields=["status", "starts_at", "ends_at"])
         url = reverse("auction-detail", args=[self.auction.id])
         r1 = self.client.get(url)
         r2 = self.client.get(url)

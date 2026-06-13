@@ -33,7 +33,10 @@ class AuctionSubscription(models.Model):
         default=Status.PENDING_PAYMENT,
         db_index=True,
     )
+    insurance_fee = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     subscription_fee = models.DecimalField(max_digits=12, decimal_places=2)
+    total_fee = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    idempotency_key = models.CharField(max_length=128, blank=True, default="")
     payment_status = models.CharField(
         max_length=32,
         choices=PaymentStatus.choices,

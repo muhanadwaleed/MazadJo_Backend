@@ -29,7 +29,6 @@ from auctions.services import (
     maybe_close_auction,
     on_auction_entered_review,
     perform_seller_cancel,
-    perform_staff_publish,
     perform_staff_review,
 )
 from auctions.validation import validate_auction_fields, validate_media_upload
@@ -55,7 +54,7 @@ class AuctionViewSet(
     lookup_field = "pk"
 
     def get_permissions(self):
-        if self.action in ("staff_review", "staff_publish", "review_checklist"):
+        if self.action in ("staff_review", "review_checklist"):
             return [IsAuthenticated(), IsStaffUser()]
         if self.action in (
             "update",
@@ -82,7 +81,7 @@ class AuctionViewSet(
             Auction.objects.all()
             .select_related("seller", "product_category")
             .prefetch_related("media_items")
-            .order_by("-starts_at")
+            .order_by("-created_at")
         )
         qs = filter_auctions_for_request(
             qs,
@@ -353,16 +352,6 @@ class AuctionViewSet(
             decision=decision,
             reason=reason,
             request=request,
-        )
-        return Response(
-            AuctionDetailSerializer(auction, context={"request": request}).data
-        )
-
-    @action(detail=True, methods=["post"], url_path="staff/publish")
-    def staff_publish(self, request, pk=None):
-        auction = self.get_object()
-        auction = perform_staff_publish(
-            auction, publisher=request.user, request=request
         )
         return Response(
             AuctionDetailSerializer(auction, context={"request": request}).data

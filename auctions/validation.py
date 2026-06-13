@@ -166,14 +166,8 @@ SELLER_CANCELLABLE_STATUSES = (
 )
 
 
-def validate_publish_schedule(auction: Auction) -> None:
-    """Ensure schedule is valid when staff publishes an approved auction."""
-    errors: dict[str, list[str]] = {}
-
-    if auction.ends_at <= auction.starts_at:
-        errors.setdefault("ends_at", []).append(
-            "End time must be after start time."
+def validate_duration_days(duration_days: int) -> None:
+    if duration_days < 1:
+        raise DRFValidationError(
+            {"duration_days": ["Duration must be at least 1 day."]}
         )
-
-    if errors:
-        raise DRFValidationError(errors)

@@ -50,8 +50,9 @@ class Auction(models.Model):
         related_name="auctions",
     )
     location_link = models.URLField(max_length=1024, blank=True)
-    starts_at = models.DateTimeField(db_index=True)
-    ends_at = models.DateTimeField(db_index=True)
+    duration_days = models.PositiveIntegerField(default=7)
+    starts_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    ends_at = models.DateTimeField(null=True, blank=True, db_index=True)
     origin_deadline = models.DateTimeField(null=True, blank=True)
     extend_deadline = models.DateTimeField(null=True, blank=True)
     actual_end_at = models.DateTimeField(null=True, blank=True)

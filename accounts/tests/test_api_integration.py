@@ -12,7 +12,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from auctions.models import Auction
+from auctions.models import Auction, AuctionMedia
 from catalog.models import Area, City, Country, ProductSettings
 from catalog.tests.helpers import create_test_category
 from payments.models import PaymentTransaction
@@ -90,7 +90,6 @@ class ApiV1FlowTests(TestCase):
 
     def test_auction_flow_publish_subscribe_bid_webhook(self):
         self.client.force_authenticate(self.seller)
-        now = timezone.now()
         auction = Auction.objects.create(
             seller=self.seller,
             product_category=self.category,
@@ -101,11 +100,15 @@ class ApiV1FlowTests(TestCase):
             start_price=Decimal("1000.00"),
             current_price=Decimal("1000.00"),
             min_bid_increment=Decimal("50.00"),
-            starts_at=now + timedelta(days=1),
-            ends_at=now + timedelta(days=2),
-            origin_deadline=now + timedelta(days=2),
-            extend_deadline=now + timedelta(days=2),
+            duration_days=7,
             status=Auction.Status.DRAFT,
+        )
+        AuctionMedia.objects.create(
+            auction=auction,
+            media_type=AuctionMedia.MediaType.IMAGE,
+            file_data=b"\x89PNG",
+            file_type="image/png",
+            file_name="a.png",
         )
         aid = auction.id
         submit = self.client.post(reverse("auction-submit", args=[aid]))
@@ -117,14 +120,19 @@ class ApiV1FlowTests(TestCase):
             format="json",
         )
         self.assertEqual(review.status_code, status.HTTP_200_OK)
-        pub = self.client.post(reverse("auction-staff-publish", args=[aid]))
-        self.assertEqual(pub.status_code, status.HTTP_200_OK)
+
+        self.client.force_authenticate(self.seller)
+        seller_sub = self.client.post(
+            reverse("subscription-list"), {"auction": aid}, format="json"
+        )
+        self.assertEqual(seller_sub.status_code, status.HTTP_201_CREATED)
+        mp_seller = self.client.post(
+            reverse("subscription-mark-paid", args=[seller_sub.data["id"]])
+        )
+        self.assertEqual(mp_seller.status_code, status.HTTP_200_OK)
         auction = Auction.objects.get(pk=aid)
-        now = timezone.now()
-        auction.starts_at = now - timedelta(hours=1)
-        auction.ends_at = now + timedelta(hours=2)
-        auction.status = Auction.Status.ACTIVE
-        auction.save(update_fields=["starts_at", "ends_at", "status"])
+        self.assertEqual(auction.status, Auction.Status.ACTIVE)
+        self.assertIsNotNone(auction.ends_at)
 
         self.client.force_authenticate(self.bidder)
         sub = self.client.post(
@@ -132,7 +140,6 @@ class ApiV1FlowTests(TestCase):
         )
         self.assertEqual(sub.status_code, status.HTTP_201_CREATED)
         sid = sub.data["id"]
-        self.client.force_authenticate(self.staff)
         mp = self.client.post(reverse("subscription-mark-paid", args=[sid]))
         self.assertEqual(mp.status_code, status.HTTP_200_OK)
 

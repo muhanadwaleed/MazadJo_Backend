@@ -47,9 +47,22 @@ class AuctionStatusVisibilityTests(TestCase):
             start_price=Decimal("100"),
             current_price=Decimal("100"),
             min_bid_increment=Decimal("10"),
-            starts_at=self.now + timedelta(days=1),
-            ends_at=self.now + timedelta(days=2),
+            duration_days=7,
+            starts_at=self.now + timedelta(days=1) if auction_status == Auction.Status.ACTIVE else None,
+            ends_at=self.now + timedelta(days=2) if auction_status == Auction.Status.ACTIVE else None,
         )
+
+    def test_anon_list_ended_includes_without_bids(self):
+        self._create(title="Sold", auction_status=Auction.Status.ENDED)
+        self._create(
+            title="No bids", auction_status=Auction.Status.ENDED_WITHOUT_BIDS
+        )
+        self._create(title="Live", auction_status=Auction.Status.ACTIVE)
+
+        r = self.client.get(self.list_url, {"status": "ended"})
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        titles = {row["title"] for row in r.data["results"]}
+        self.assertEqual(titles, {"Sold", "No bids"})
 
     def test_anon_cannot_list_under_review_status(self):
         self._create(title="Hidden", auction_status=Auction.Status.UNDER_REVIEW)
